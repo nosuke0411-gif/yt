@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube連続音声プレイヤー</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; line-height: 1.6; }
+        .input-group { margin-bottom: 20px; }
+        input[type="text"] { width: 80%; padding: 8px; font-size: 16px; }
+        button { padding: 8px 16px; font-size: 16px; cursor: pointer; }
+        .player-container { border: 1px solid #ccc; padding: 20px; border-radius: 8px; background: #f9f9f9; }
+        #track-title { font-weight: bold; color: #333; }
+        #status { color: #666; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+    <h2>YouTube プレイリスト連続音声再生</h2>
+    
+    <!-- 1. URL入力エリア -->
+    <div class="input-group">
+        <label for="playlist-url">YouTube プレイリストURL:</label><br>
+        <input type="text" id="playlist-url" placeholder="https://youtube.com..." />
+        <button id="start-btn">再生開始</button>
+    </div>
+
+    <!-- 2. プレイヤーエリア -->
+    <div class="player-container">
+        <p>現在の再生: <span id="track-title">停止中</span></p>
+        <p id="status">プレイリストURLを入力して再生ボタンを押してください。</p>
+        <audio id="audio-player" controls autoplay style="width: 100%;"></audio>
+    </div>
+
+    <script>
+        // 同じサーバー上のAPIを叩くため、ドメインは自動取得
+        const API_BASE_URL = window.location.origin; 
+        
+        let currentIndex = 0;
+        let currentPlaylistUrl = "";
+        
+        const audioPlayer = document.getElementById('audio-player');
+        const trackTitle = document.getElementById('track-title');
+        const statusText = document.getElementById('status');
+        const playlistInput = document.getElementById('playlist-url');
+        const startBtn = document.getElementById('start-btn');
+
+        // 音声URLを取得して再生する関数
+        async function loadAndPlayTrack(index) {
+            if (!currentPlaylistUrl) return;
+
+            statusText.innerText = `曲データを読み込み中... (インデックス: ${index})`;
+            try {
+                const response = await fetch(`${API_BASE_URL}/get_audio?playlist=${encodeURIComponent(currentPlaylistUrl)}&index=${index}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    alert("エラー: " + data.error);
+                    statusText.innerText = "再生が停止しました。";
+                    trackTitle.innerText = "停止中";
+                    return;
+                }
+
+                // 再生処理
+                audioPlayer.src = data.audio_url;
+                trackTitle.innerText = data.title;
+                statusText.innerText = `再生中 (${index + 1} / ${data.total} 本目)`;
+                
+                // 次のインデックスを保持
+                currentIndex = data.next_index;
+
+            } catch (error) {
+                console.error("通信エラー:", error);
+                statusText.innerText = "サーバーとの通信に失敗しました。";
+            }
+        }
+
+        // 「再生開始」ボタンが押されたとき
+        startBtn.addEventListener('click', () => {
+            const url = playlistInput.value.trim();
+            if (!url) {
+                alert("プレイリストのURLを入力してください。");
+                return;
+            }
+            currentPlaylistUrl = url;
+            currentIndex = 0; // 最初から再生
+            loadAndPlayTrack(currentIndex);
+        });
+
+        // 🔴 1曲終わったら自動的に次の曲へループ
+        audioPlayer.addEventListener('ended', () => {
+            console.log("終了。次の曲を読み込みます。Next Index:", currentIndex);
+            loadAndPlayTrack(currentIndex);
+        });
+    </script>
+</body>
+</html>
